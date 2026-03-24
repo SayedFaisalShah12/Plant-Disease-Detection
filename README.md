@@ -1,72 +1,54 @@
-# Plant Disease Detection — FastAPI Backend
+# Plant Disease Detection — Production Stack
 
-## Project Structure
+This project uses a production-grade architecture with **FastAPI** as the gateway and **TensorFlow Serving** for scalable model inference.
+
+## 📁 Architecture
 
 ```
 PDD/
-├── api/
-│   ├── __init__.py
-│   ├── main.py              ← FastAPI app & CORS config
+├── api/             ← FastAPI Gateway
+│   ├── main.py
 │   ├── routes/
-│   │   ├── __init__.py
-│   │   └── prediction.py    ← POST /api/v1/predict, GET /api/v1/classes
 │   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── prediction.py    ← Pydantic response models
-│   └── services/
-│       ├── __init__.py
-│       └── model_service.py ← Model loading & inference logic
-├── saved_models/
-│   └── pdd_best.keras       ← Trained Keras model
-├── training/                ← Dataset & notebook
-├── run.py                   ← Server entry point
+│   └── services/    ← model_service.py (talks to TF Serving)
+├── models/
+│   └── pdd/
+│       └── 1/       ← Versioned SavedModel
+│           ├── saved_model.pb
+│           └── variables/
+├── run.py           ← FastAPI Entry Point
+├── start_serving.bat ← TF Serving Docker Entry Point
 ├── requirements.txt
-└── training.ipynb
+└── export_model.py  ← Keras-to-SavedModel Exporter
 ```
 
-## Setup & Run
+## 🚀 How to Run
 
+### 1. Start TensorFlow Serving (Docker required)
+Run the batch script:
+```cmd
+start_serving.bat
+```
+*Alternatively (Manual Docker command):*
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+docker run -p 8501:8501 --name tf_serving_pdd --mount type=bind,source=E:/Deep Learning/Z-Projects/PDD/models/pdd,target=/models/pdd -e MODEL_NAME=pdd -t tensorflow/serving
+```
 
-# 2. Start the server
+### 2. Start FastAPI Gateway
+In a separate terminal:
+```bash
+pip install -r requirements.txt
 python run.py
 ```
 
-The API will be available at: **http://localhost:8000**
+## 📍 Endpoints
 
-## API Endpoints
+- **FastAPI**: `http://localhost:8000/api/v1/predict` (Human Friendly)
+- **TF Serving REST**: `http://localhost:8501/v1/models/pdd:predict` (Direct Inference)
+- **Interactive API Docs**: `http://localhost:8000/docs`
 
-| Method | Endpoint               | Description                          |
-|--------|------------------------|--------------------------------------|
-| GET    | `/`                    | Health check / welcome message       |
-| GET    | `/health`              | Simple status check                  |
-| POST   | `/api/v1/predict`      | Upload leaf image → get prediction   |
-| GET    | `/api/v1/classes`      | List all supported disease classes   |
+## 🧠 Why TF Serving?
 
-Interactive docs: **http://localhost:8000/docs**
-
-## Example Usage (curl)
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/predict" \
-  -H "accept: application/json" \
-  -F "file=@your_potato_leaf.jpg"
-```
-
-## Example Response
-
-```json
-{
-  "predicted_class": "Potato___Early_blight",
-  "confidence": 97.43,
-  "all_predictions": [
-    { "label": "Potato___Early_blight", "confidence": 97.43 },
-    { "label": "Potato___Late_blight",  "confidence": 1.89 },
-    { "label": "Potato___healthy",      "confidence": 0.68 }
-  ],
-  "is_healthy": false,
-  "message": "Early Blight detected. Caused by Alternaria solani fungus. Apply fungicides..."
-}
-```
+1.  **Independent Scaling**: Scale the API and Model separately.
+2.  **Versioning**: Serve `/models/pdd/1/` now, and simply drop `/models/pdd/2/` later to update without downtime.
+3.  **Efficiency**: High-performance C++ server meant for production.

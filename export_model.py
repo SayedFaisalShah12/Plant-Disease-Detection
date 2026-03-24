@@ -16,13 +16,10 @@ def export_model():
     print(f"📦 Loading Keras model from {KERAS_MODEL_PATH}...")
     model = tf.keras.models.load_model(str(KERAS_MODEL_PATH))
 
-    print(f"🚀 Exporting to SavedModel format at: {EXPORT_PATH}")
+    print(f"🚀 Exporting to SavedModel format at: {TF_SERVING_BASE}")
     
-    # Create the directory if it doesn't exist
-    EXPORT_PATH.mkdir(parents=True, exist_ok=True)
-    
-    # Save the model in TF SavedModel format
-    tf.saved_model.save(model, str(EXPORT_PATH))
+    # Keras 3 recommended export for TF Serving
+    model.export(str(TF_SERVING_BASE))
     print("✅ Model successfully exported for TF Serving!")
 
 if __name__ == "__main__":

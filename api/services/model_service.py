@@ -1,10 +1,12 @@
 import numpy as np
+import requests
 from PIL import Image
-from tensorflow import keras
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MODEL_PATH = Path(__file__).resolve().parents[2] / "saved_models" / "pdd_best.keras"
+# TF Serving endpoint (default port 8501)
+TF_SERVING_URL = "http://localhost:8501/v1/models/pdd:predict"
+
 IMG_SIZE = (256, 256)
 
 CLASS_NAMES = [
@@ -25,39 +27,37 @@ DISEASE_MESSAGES = {
     "Potato___healthy": "The plant appears healthy. No disease detected. Keep up good agricultural practices!",
 }
 
-# ── Singleton Model ────────────────────────────────────────────────────────────
-_model = None
-
-
 def load_model() -> None:
-    """Load the Keras model once into memory."""
-    global _model
-    if _model is None:
-        print(f"[ModelService] Loading model from: {MODEL_PATH}")
-        _model = keras.models.load_model(str(MODEL_PATH))
-        print("[ModelService] Model loaded successfully ✔")
-
+    """No local loading needed for TF Serving."""
+    print(f"[ModelService] Configured to use TF Serving at: {TF_SERVING_URL}")
 
 def get_model():
-    if _model is None:
-        load_model()
-    return _model
-
+    """Placeholder as model is hosted externally."""
+    return None
 
 # ── Preprocessing ──────────────────────────────────────────────────────────────
 def preprocess_image(image: Image.Image) -> np.ndarray:
     """Resize, convert to RGB array, and normalise to [0, 1]."""
     image = image.convert("RGB").resize(IMG_SIZE)
     arr = np.array(image, dtype=np.float32) / 255.0
-    return np.expand_dims(arr, axis=0)  # (1, H, W, 3)
-
+    return np.expand_dims(arr, axis=0)  # (1, 256, 256, 3)
 
 # ── Prediction ────────────────────────────────────────────────────────────────
 def predict(image: Image.Image) -> dict:
-    """Run inference and return a structured prediction result."""
-    model = get_model()
+    """Send preprocessing image to TF Serving and return structured result."""
     tensor = preprocess_image(image)
-    predictions = model.predict(tensor)[0]  # shape: (num_classes,)
+    
+    # TF Serving expects JSON: {"instances": [[...]]}
+    payload = {
+        "instances": tensor.tolist()
+    }
+    
+    response = requests.post(TF_SERVING_URL, json=payload)
+    
+    if response.status_code != 200:
+        raise Exception(f"TF Serving error: {response.text}")
+        
+    predictions = response.json()["predictions"][0]  # shape: (num_classes,)
 
     predicted_idx = int(np.argmax(predictions))
     predicted_class = CLASS_NAMES[predicted_idx]
